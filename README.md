@@ -4,27 +4,62 @@ Local-only MVP for moving Twitch VODs you own or have rights to upload into YouT
 
 ## Prerequisites
 
-- Docker Desktop with Docker Compose, or:
+- Windows 10/11 with PowerShell
 - Python 3.12+
 - Node.js 20+
-- `yt-dlp` available on `PATH` for manual backend runs
-- Twitch developer app credentials, optional for public VOD lookup
 - Google OAuth credentials with YouTube Data API v3 enabled
+- Twitch developer app credentials only if you want optional Twitch OAuth fallback
 
-## Configure Twitch VOD Lookup
+The backend installs `yt-dlp` into its local Python virtual environment from `backend/requirements.txt`.
 
-The main VOD list can work without Twitch OAuth. Enter a public Twitch channel login in the UI and the backend fetches public past broadcasts, including title, Twitch URL, thumbnail, creation timestamp, duration, uploader, game/category, and view count when Twitch exposes them publicly. It uses Twitch's public web GraphQL metadata path first and falls back to `yt-dlp` if that changes.
+## One-command start
 
-Twitch OAuth is kept as an optional fallback for users who want to connect an account through Helix.
+From the project root:
 
-## Configure Twitch OAuth Optional
+```powershell
+.\start.bat
+```
 
-1. Open the [Twitch Developer Console](https://dev.twitch.tv/console/apps).
-2. Create an application.
-3. Set the OAuth redirect URL to `http://localhost:8000/auth/twitch/callback`.
-4. Copy the client ID and client secret into `.env`.
+The script will:
 
-The MVP uses Twitch OAuth authorization code flow and then calls Helix Videos for the connected user's latest archive VODs.
+- create `.env` from `.env.example` if it does not exist;
+- create `backend/.venv`;
+- install backend dependencies;
+- install frontend dependencies;
+- use `data/app.db` for SQLite;
+- use `downloads/` for temporary VOD files;
+- start the FastAPI backend and Vite frontend.
+
+Then open:
+
+- Frontend: http://localhost:5173
+- Backend health: http://localhost:8000/health
+
+Keep the terminal open while using the app. Press `Ctrl+C` to stop both servers. Runtime logs are written to `logs/`.
+
+## Environment
+
+If `.env` was created automatically, fill in the Google values before uploading to YouTube:
+
+```env
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+```
+
+Twitch OAuth values are optional for the current MVP because public VOD lookup works by Twitch channel login:
+
+```env
+TWITCH_CLIENT_ID=
+TWITCH_CLIENT_SECRET=
+```
+
+Do not commit `.env`, SQLite databases, local downloads, logs, or OAuth tokens.
+
+## Public Twitch VOD Lookup
+
+The main VOD list works without Twitch OAuth. Enter a public Twitch channel login in the UI and the backend fetches public past broadcasts, including title, Twitch URL, thumbnail, creation timestamp, duration, uploader, game/category, and view count when Twitch exposes them publicly.
+
+The backend uses Twitch's public web metadata path first and falls back to `yt-dlp` if that path changes. Twitch OAuth is still available as an optional fallback through Helix for users who connect an account.
 
 ## Configure Google and YouTube
 
@@ -38,44 +73,18 @@ The MVP uses Twitch OAuth authorization code flow and then calls Helix Videos fo
 
 The app requests the `https://www.googleapis.com/auth/youtube.upload` scope and uses resumable uploads.
 
-## Environment
+## Configure Twitch OAuth Optional
 
-Create `.env` from the example:
+1. Open the [Twitch Developer Console](https://dev.twitch.tv/console/apps).
+2. Create an application.
+3. Set the OAuth redirect URL to `http://localhost:8000/auth/twitch/callback`.
+4. Copy the client ID and client secret into `.env`.
 
-```powershell
-Copy-Item .env.example .env
-```
+This is optional. You can fetch public VODs by channel login without Twitch OAuth.
 
-Fill in:
+## Manual Run
 
-```env
-TWITCH_CLIENT_ID=
-TWITCH_CLIENT_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-```
-
-Do not commit `.env`, SQLite databases, local downloads, or OAuth tokens.
-
-## Run with Docker Compose
-
-```powershell
-docker compose up --build
-```
-
-Then open:
-
-- Frontend: http://localhost:5173
-- Backend health: http://localhost:8000/health
-
-Docker Compose mounts:
-
-- `./data` to persist SQLite when `DATABASE_URL=sqlite:////data/app.db`
-- `./downloads` for temporary video files
-
-The Compose file sets the backend container to `sqlite:////data/app.db` and `/downloads` so the database and temporary files land in those mounted folders. The `.env.example` values are still useful for manual runs.
-
-## Run Manually
+The one-command script is the normal path. If you need to run services manually, use two terminals.
 
 Backend:
 
@@ -84,9 +93,9 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:DATABASE_URL="sqlite:///./app.db"
+$env:DATABASE_URL="sqlite:///../data/app.db"
 $env:DOWNLOAD_DIR="../downloads"
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Frontend:
@@ -94,16 +103,14 @@ Frontend:
 ```powershell
 cd frontend
 npm install
-npm run dev -- --host 0.0.0.0
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
-
-Open http://localhost:5173.
 
 ## Core Flow
 
-1. Connect Twitch.
-2. Connect Google.
-3. Fetch latest VODs.
+1. Start the app with `.\start.bat`.
+2. Enter a Twitch channel login and fetch latest public VODs.
+3. Connect Google.
 4. Select one or more VODs.
 5. Edit YouTube title, description, and privacy for each selected VOD.
 6. Add jobs to the queue.
@@ -135,10 +142,10 @@ Open http://localhost:5173.
 
 ## Troubleshooting
 
-- **OAuth credentials missing**: verify `.env` has client IDs and secrets and restart the backend.
-- **Redirect URI mismatch**: the URI in Twitch/Google developer settings must exactly match the callback in `.env`.
-- **No Google refresh token**: revoke the app grant or reconnect; the MVP uses `access_type=offline` and `prompt=consent`.
-- **Twitch VOD fetch returns unauthorized**: reconnect Twitch; the local token may be expired or revoked.
-- **`yt-dlp` not found**: install `yt-dlp` locally or run the Docker backend image, which installs it from `requirements.txt`.
-- **YouTube upload 403**: check that YouTube Data API v3 is enabled, the OAuth consent screen is configured, and the account has upload permission.
+- **Google OAuth credentials missing**: verify `.env` has `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then restart with `.\start.bat`.
+- **Redirect URI mismatch**: the URI in Google or Twitch developer settings must exactly match the callback in `.env`.
+- **No Google refresh token**: revoke the app grant in your Google account permissions and reconnect; the MVP uses `access_type=offline` and `prompt=consent`.
+- **Public Twitch VOD fetch fails**: verify the channel login and that past broadcasts are public. The fallback requires the backend venv dependency `yt-dlp`.
+- **Port already in use**: stop the process using port `8000` or `5173`, then run `.\start.bat` again.
+- **YouTube upload 403**: check that YouTube Data API v3 is enabled, the OAuth consent screen is configured, and the Google account has upload permission.
 - **Large uploads fail**: retry the failed job. The MVP uses YouTube resumable uploads with simple retry behavior for transient server errors.
