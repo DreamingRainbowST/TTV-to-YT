@@ -33,6 +33,7 @@ function readOauthMessage() {
 export default function App() {
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
   const [vods, setVods] = useState<TwitchVod[]>([]);
+  const [channel, setChannel] = useState(() => window.localStorage.getItem("twitch-channel") ?? "");
   const [selectedDrafts, setSelectedDrafts] = useState<Record<string, SelectedVodDraft>>({});
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [loadingVods, setLoadingVods] = useState(false);
@@ -72,13 +73,21 @@ export default function App() {
   }, [refreshJobs]);
 
   async function fetchVods() {
+    const trimmedChannel = channel.trim().replace(/^@/, "");
+    if (!trimmedChannel) {
+      setError("Enter a Twitch channel login first.");
+      return;
+    }
+
     setLoadingVods(true);
     setError(null);
     setNotice(null);
     try {
-      const latest = await getVods();
+      window.localStorage.setItem("twitch-channel", trimmedChannel);
+      setChannel(trimmedChannel);
+      const latest = await getVods(trimmedChannel);
       setVods(latest);
-      setNotice(`Fetched ${latest.length} Twitch VODs.`);
+      setNotice(`Fetched ${latest.length} public Twitch VODs for ${trimmedChannel}.`);
       await refreshAuth();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not fetch Twitch VODs.");
@@ -155,7 +164,15 @@ export default function App() {
           {error ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>
           ) : null}
-          <VodList vods={vods} selectedIds={selectedIds} loading={loadingVods} onFetch={fetchVods} onToggle={toggleVod} />
+          <VodList
+            vods={vods}
+            selectedIds={selectedIds}
+            channel={channel}
+            loading={loadingVods}
+            onChannelChange={setChannel}
+            onFetch={fetchVods}
+            onToggle={toggleVod}
+          />
         </div>
         <div className="space-y-6">
           <SelectedVodEditor
@@ -172,4 +189,3 @@ export default function App() {
     </div>
   );
 }
-

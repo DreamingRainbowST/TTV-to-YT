@@ -8,10 +8,16 @@ Local-only MVP for moving Twitch VODs you own or have rights to upload into YouT
 - Python 3.12+
 - Node.js 20+
 - `yt-dlp` available on `PATH` for manual backend runs
-- Twitch developer app credentials
+- Twitch developer app credentials, optional for public VOD lookup
 - Google OAuth credentials with YouTube Data API v3 enabled
 
-## Configure Twitch OAuth
+## Configure Twitch VOD Lookup
+
+The main VOD list can work without Twitch OAuth. Enter a public Twitch channel login in the UI and the backend fetches public past broadcasts, including title, Twitch URL, thumbnail, creation timestamp, duration, uploader, game/category, and view count when Twitch exposes them publicly. It uses Twitch's public web GraphQL metadata path first and falls back to `yt-dlp` if that changes.
+
+Twitch OAuth is kept as an optional fallback for users who want to connect an account through Helix.
+
+## Configure Twitch OAuth Optional
 
 1. Open the [Twitch Developer Console](https://dev.twitch.tv/console/apps).
 2. Create an application.

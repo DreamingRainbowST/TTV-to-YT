@@ -13,6 +13,11 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function formatViews(value: number | null) {
+  if (value === null || value === undefined) return "Views unknown";
+  return `${new Intl.NumberFormat().format(value)} views`;
+}
+
 export default function VodCard({ vod, selected, onToggle }: Props) {
   return (
     <article
@@ -30,8 +35,13 @@ export default function VodCard({ vod, selected, onToggle }: Props) {
         </div>
         <div className="mt-3">
           <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-950">{vod.title}</h3>
+          <p className="mt-2 truncate text-xs font-medium text-slate-600">
+            {[vod.uploader ?? vod.uploader_id, vod.game_name].filter(Boolean).join(" - ") || "Twitch VOD"}
+          </p>
           <p className="mt-2 text-xs text-slate-500">{formatDate(vod.created_at)}</p>
-          <p className="mt-1 text-xs text-slate-500">{vod.duration ?? "Unknown duration"}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {vod.duration ?? "Unknown duration"} - {formatViews(vod.view_count)}
+          </p>
         </div>
       </button>
       <div className="flex items-center justify-between gap-2">
@@ -57,4 +67,3 @@ export default function VodCard({ vod, selected, onToggle }: Props) {
     </article>
   );
 }
-

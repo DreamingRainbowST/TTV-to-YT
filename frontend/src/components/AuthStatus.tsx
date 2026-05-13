@@ -28,7 +28,7 @@ export default function AuthStatus({ authStatus, onRefresh }: Props) {
     <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
       <div>
         <h1 className="text-xl font-semibold tracking-normal text-slate-950">Twitch VOD to YouTube Uploader</h1>
-        <p className="mt-1 text-sm text-slate-500">Local queue for VODs you own or have rights to upload.</p>
+        <p className="mt-1 text-sm text-slate-500">Local queue for VODs you own or have rights to upload. Twitch OAuth is optional.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge connected={authStatus.twitch} label="Twitch" />
@@ -38,7 +38,7 @@ export default function AuthStatus({ authStatus, onRefresh }: Props) {
           className="inline-flex min-h-10 items-center gap-2 rounded-md bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800"
         >
           <Plug className="h-4 w-4" aria-hidden="true" />
-          Connect Twitch
+          Connect Twitch optional
         </a>
         <a
           href={`${API_BASE_URL}/auth/google/login`}
@@ -59,4 +59,3 @@ export default function AuthStatus({ authStatus, onRefresh }: Props) {
     </div>
   );
 }
-

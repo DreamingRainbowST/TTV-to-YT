@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.database import get_db, init_db
 from app.schemas import AuthStatusOut, HealthOut, TwitchVodOut, UploadJobOut, UploadJobsCreate
 from app.services import job_service, twitch_service
+from app.services.downloader_service import TwitchPublicFetchError, fetch_public_vods
 from app.services.oauth_token_service import get_token
 from app.worker import JobWorker
 
@@ -116,7 +117,16 @@ def auth_status(db: Session = Depends(get_db)) -> AuthStatusOut:
 
 
 @app.get("/api/vods", response_model=list[TwitchVodOut])
-def get_vods(db: Session = Depends(get_db)) -> list[TwitchVodOut]:
+def get_vods(
+    channel: str | None = Query(default=None, min_length=3, max_length=25),
+    db: Session = Depends(get_db),
+) -> list[TwitchVodOut]:
+    if channel:
+        try:
+            return fetch_public_vods(channel, limit=20)
+        except TwitchPublicFetchError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     try:
         return twitch_service.fetch_latest_vods(db, settings, limit=20)
     except twitch_auth.TwitchAuthError as exc:

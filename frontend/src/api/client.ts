@@ -29,8 +29,9 @@ export function getAuthStatus(): Promise<AuthStatus> {
   return request<AuthStatus>("/api/auth/status");
 }
 
-export function getVods(): Promise<TwitchVod[]> {
-  return request<TwitchVod[]>("/api/vods");
+export function getVods(channel?: string): Promise<TwitchVod[]> {
+  const params = channel?.trim() ? `?channel=${encodeURIComponent(channel.trim())}` : "";
+  return request<TwitchVod[]>(`/api/vods${params}`);
 }
 
 export function createJobs(jobs: SelectedVodDraft[]): Promise<UploadJob[]> {
@@ -51,4 +52,3 @@ export function retryJob(jobId: number): Promise<UploadJob> {
 export function cancelJob(jobId: number): Promise<UploadJob> {
   return request<UploadJob>(`/api/jobs/${jobId}/cancel`, { method: "POST" });
 }
-

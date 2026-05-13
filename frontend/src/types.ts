@@ -13,6 +13,10 @@ export interface TwitchVod {
   thumbnail_url: string | null;
   created_at: string | null;
   duration: string | null;
+  view_count: number | null;
+  uploader: string | null;
+  uploader_id: string | null;
+  game_name: string | null;
 }
 
 export interface SelectedVodDraft {
@@ -44,4 +48,3 @@ export interface UploadJob {
   started_at: string | null;
   finished_at: string | null;
 }
-

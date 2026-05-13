@@ -23,6 +23,10 @@ class TwitchVodOut(BaseModel):
     thumbnail_url: str | None = None
     created_at: str | None = None
     duration: str | None = None
+    view_count: int | None = None
+    uploader: str | None = None
+    uploader_id: str | None = None
+    game_name: str | None = None
 
 
 class UploadJobCreate(BaseModel):
@@ -72,4 +76,3 @@ class UploadJobOut(BaseModel):
     updated_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
-

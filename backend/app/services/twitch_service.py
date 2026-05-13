@@ -39,6 +39,10 @@ def _to_vod_out(raw: dict[str, Any]) -> TwitchVodOut:
         thumbnail_url=_thumbnail_url(raw.get("thumbnail_url")),
         created_at=raw.get("created_at"),
         duration=raw.get("duration"),
+        view_count=raw.get("view_count"),
+        uploader=raw.get("user_name"),
+        uploader_id=raw.get("user_login") or raw.get("user_id"),
+        game_name=None,
     )
 
 
@@ -84,4 +88,3 @@ def fetch_latest_vods(db: Session, settings: Settings, limit: int = 20) -> list[
 
     db.commit()
     return vods
-
