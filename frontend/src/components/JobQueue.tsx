@@ -47,6 +47,9 @@ export default function JobQueue({ jobs, onRetry, onCancel }: Props) {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-950">{job.youtube_title}</p>
                   <p className="mt-1 text-xs text-slate-500">Privacy: {job.privacy_status}</p>
+                  {job.youtube_playlist_title ? (
+                    <p className="mt-1 truncate text-xs text-slate-500">Playlist: {job.youtube_playlist_title}</p>
+                  ) : null}
                   {job.error_message ? (
                     <p className="mt-2 line-clamp-3 text-xs text-rose-700">{job.error_message}</p>
                   ) : null}
@@ -115,4 +118,3 @@ export default function JobQueue({ jobs, onRetry, onCancel }: Props) {
     </section>
   );
 }
-

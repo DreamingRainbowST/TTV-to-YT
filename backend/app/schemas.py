@@ -36,6 +36,8 @@ class UploadJobCreate(BaseModel):
     youtube_title: str = Field(min_length=1, max_length=100)
     youtube_description: str = ""
     privacy_status: PrivacyStatus = "private"
+    youtube_playlist_id: str | None = Field(default=None, max_length=128)
+    youtube_playlist_title: str | None = Field(default=None, max_length=300)
 
     @field_validator("youtube_title", "twitch_title")
     @classmethod
@@ -49,6 +51,14 @@ class UploadJobCreate(BaseModel):
     @classmethod
     def normalize_description(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("youtube_playlist_id", "youtube_playlist_title")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
 
 class UploadJobsCreate(BaseModel):
@@ -70,9 +80,20 @@ class UploadJobOut(BaseModel):
     local_file_path: str | None
     youtube_video_id: str | None
     youtube_url: str | None
+    youtube_playlist_id: str | None
+    youtube_playlist_title: str | None
+    youtube_playlist_item_id: str | None
     error_message: str | None
     retry_count: int
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+
+class YouTubePlaylistOut(BaseModel):
+    id: str
+    title: str
+    description: str | None = None
+    privacy_status: str | None = None
+    item_count: int | None = None

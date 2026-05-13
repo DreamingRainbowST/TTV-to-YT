@@ -1,17 +1,38 @@
-import { Send } from "lucide-react";
+import { RefreshCw, Send } from "lucide-react";
 
-import type { PrivacyStatus, SelectedVodDraft } from "../types";
+import type { PrivacyStatus, SelectedVodDraft, YouTubePlaylist } from "../types";
 
 interface Props {
   selected: SelectedVodDraft[];
   submitting: boolean;
+  playlists: YouTubePlaylist[];
+  playlistsLoading: boolean;
   onChange: (vodId: string, patch: Partial<SelectedVodDraft>) => void;
+  onApplyPlaylistToAll: (playlistId: string) => void;
+  onRefreshPlaylists: () => void;
   onSubmit: () => void;
 }
 
 const privacyOptions: PrivacyStatus[] = ["private", "unlisted", "public"];
 
-export default function SelectedVodEditor({ selected, submitting, onChange, onSubmit }: Props) {
+export default function SelectedVodEditor({
+  selected,
+  submitting,
+  playlists,
+  playlistsLoading,
+  onChange,
+  onApplyPlaylistToAll,
+  onRefreshPlaylists,
+  onSubmit
+}: Props) {
+  function playlistPatch(playlistId: string): Pick<SelectedVodDraft, "youtube_playlist_id" | "youtube_playlist_title"> {
+    const playlist = playlists.find((item) => item.id === playlistId);
+    return {
+      youtube_playlist_id: playlist?.id ?? null,
+      youtube_playlist_title: playlist?.title ?? null
+    };
+  }
+
   return (
     <section>
       <div className="mb-3">
@@ -24,6 +45,37 @@ export default function SelectedVodEditor({ selected, submitting, onChange, onSu
         </div>
       ) : (
         <div className="space-y-3">
+          <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Playlist</h3>
+                <p className="text-xs text-slate-500">Optional. Apply one YouTube playlist to all selected jobs.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onRefreshPlaylists}
+                disabled={playlistsLoading}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                title="Refresh YouTube playlists"
+              >
+                <RefreshCw className={`h-4 w-4 ${playlistsLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+              </button>
+            </div>
+            <select
+              value=""
+              onChange={(event) => onApplyPlaylistToAll(event.target.value)}
+              className="min-h-10 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+            >
+              <option value="">Apply playlist to all...</option>
+              <option value="__none__">No playlist</option>
+              {playlists.map((playlist) => (
+                <option key={playlist.id} value={playlist.id}>
+                  {playlist.title}
+                  {playlist.item_count == null ? "" : ` (${playlist.item_count})`}
+                </option>
+              ))}
+            </select>
+          </div>
           {selected.map((draft) => (
             <div key={draft.twitch_vod_id} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3">
@@ -71,6 +123,22 @@ export default function SelectedVodEditor({ selected, submitting, onChange, onSu
                     ))}
                   </select>
                 </label>
+                <label className="grid gap-1 text-sm font-medium text-slate-700">
+                  Playlist
+                  <select
+                    value={draft.youtube_playlist_id ?? ""}
+                    onChange={(event) => onChange(draft.twitch_vod_id, playlistPatch(event.target.value))}
+                    className="min-h-10 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                  >
+                    <option value="">No playlist</option>
+                    {playlists.map((playlist) => (
+                      <option key={playlist.id} value={playlist.id}>
+                        {playlist.title}
+                        {playlist.item_count == null ? "" : ` (${playlist.item_count})`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
           ))}
@@ -88,4 +156,3 @@ export default function SelectedVodEditor({ selected, submitting, onChange, onSu
     </section>
   );
 }
-

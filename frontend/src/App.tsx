@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { cancelJob, createJobs, getAuthStatus, getJobs, getVods, retryJob } from "./api/client";
+import { cancelJob, createJobs, getAuthStatus, getJobs, getVods, getYouTubePlaylists, retryJob } from "./api/client";
 import AuthStatus from "./components/AuthStatus";
 import JobQueue from "./components/JobQueue";
 import SelectedVodEditor from "./components/SelectedVodEditor";
 import VodList from "./components/VodList";
-import type { AuthStatus as AuthStatusType, SelectedVodDraft, TwitchVod, UploadJob } from "./types";
+import type { AuthStatus as AuthStatusType, SelectedVodDraft, TwitchVod, UploadJob, YouTubePlaylist } from "./types";
 
 const defaultAuthStatus: AuthStatusType = { twitch: false, google: false };
 
@@ -36,7 +36,9 @@ export default function App() {
   const [channel, setChannel] = useState(() => window.localStorage.getItem("twitch-channel") ?? "");
   const [selectedDrafts, setSelectedDrafts] = useState<Record<string, SelectedVodDraft>>({});
   const [jobs, setJobs] = useState<UploadJob[]>([]);
+  const [playlists, setPlaylists] = useState<YouTubePlaylist[]>([]);
   const [loadingVods, setLoadingVods] = useState(false);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(() => readOauthMessage());
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,23 @@ export default function App() {
     }
   }, []);
 
+  const refreshPlaylists = useCallback(async () => {
+    if (!authStatus.google) {
+      setPlaylists([]);
+      return;
+    }
+
+    setLoadingPlaylists(true);
+    try {
+      setPlaylists(await getYouTubePlaylists());
+    } catch (err) {
+      setPlaylists([]);
+      setError(err instanceof Error ? err.message : "Could not load YouTube playlists.");
+    } finally {
+      setLoadingPlaylists(false);
+    }
+  }, [authStatus.google]);
+
   useEffect(() => {
     void refreshAuth();
     void refreshJobs();
@@ -71,6 +90,10 @@ export default function App() {
     }, 4000);
     return () => window.clearInterval(interval);
   }, [refreshJobs]);
+
+  useEffect(() => {
+    void refreshPlaylists();
+  }, [refreshPlaylists]);
 
   async function fetchVods() {
     const trimmedChannel = channel.trim().replace(/^@/, "");
@@ -113,6 +136,26 @@ export default function App() {
       ...current,
       [vodId]: { ...current[vodId], ...patch }
     }));
+  }
+
+  function applyPlaylistToAll(playlistId: string) {
+    if (!playlistId) {
+      return;
+    }
+
+    const selectedPlaylist = playlistId === "__none__" ? null : playlists.find((playlist) => playlist.id === playlistId);
+    setSelectedDrafts((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([vodId, draft]) => [
+          vodId,
+          {
+            ...draft,
+            youtube_playlist_id: selectedPlaylist?.id ?? null,
+            youtube_playlist_title: selectedPlaylist?.title ?? null
+          }
+        ])
+      )
+    );
   }
 
   async function submitJobs() {
@@ -178,7 +221,11 @@ export default function App() {
           <SelectedVodEditor
             selected={selectedList}
             submitting={submitting}
+            playlists={playlists}
+            playlistsLoading={loadingPlaylists}
             onChange={updateDraft}
+            onApplyPlaylistToAll={applyPlaylistToAll}
+            onRefreshPlaylists={refreshPlaylists}
             onSubmit={submitJobs}
           />
         </div>

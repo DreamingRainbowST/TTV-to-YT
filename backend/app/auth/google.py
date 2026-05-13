@@ -10,7 +10,11 @@ from app.services.oauth_token_service import get_token, token_is_expiring, upser
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
-YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+]
+YOUTUBE_SCOPE = " ".join(YOUTUBE_SCOPES)
 
 
 class GoogleAuthError(RuntimeError):
@@ -29,7 +33,7 @@ def build_login_url(settings: Settings) -> str:
         "client_id": settings.google_client_id,
         "redirect_uri": settings.google_redirect_uri,
         "response_type": "code",
-        "scope": YOUTUBE_UPLOAD_SCOPE,
+        "scope": YOUTUBE_SCOPE,
         "state": state,
         "access_type": "offline",
         "include_granted_scopes": "true",
@@ -53,7 +57,7 @@ def exchange_code(db: Session, settings: Settings, code: str) -> OAuthToken:
         )
     if response.status_code >= 400:
         raise GoogleAuthError(f"Google token exchange failed: {response.text[:500]}")
-    return upsert_token(db, "google", response.json(), scope=YOUTUBE_UPLOAD_SCOPE)
+    return upsert_token(db, "google", response.json(), scope=YOUTUBE_SCOPE)
 
 
 def refresh_token(db: Session, settings: Settings, token: OAuthToken) -> OAuthToken:
@@ -73,7 +77,7 @@ def refresh_token(db: Session, settings: Settings, token: OAuthToken) -> OAuthTo
         )
     if response.status_code >= 400:
         raise GoogleAuthError("Google token refresh failed. Reconnect Google/YouTube.")
-    return upsert_token(db, "google", response.json(), scope=YOUTUBE_UPLOAD_SCOPE)
+    return upsert_token(db, "google", response.json(), scope=YOUTUBE_SCOPE)
 
 
 def get_valid_token(db: Session, settings: Settings) -> OAuthToken:
@@ -83,4 +87,3 @@ def get_valid_token(db: Session, settings: Settings) -> OAuthToken:
     if token_is_expiring(token):
         token = refresh_token(db, settings, token)
     return token
-

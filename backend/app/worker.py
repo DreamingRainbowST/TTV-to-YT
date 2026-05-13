@@ -10,7 +10,7 @@ from app.database import SessionLocal
 from app.models import UploadJob, utcnow
 from app.services.downloader_service import download_vod
 from app.services.job_service import safe_delete_download
-from app.services.youtube_service import upload_video
+from app.services.youtube_service import YouTubePlaylistError, add_video_to_playlist, upload_video
 
 logger = logging.getLogger(__name__)
 
@@ -88,30 +88,52 @@ class JobWorker:
                 )
                 job.local_file_path = downloaded_path
 
-            self._set_progress(db, job, "downloaded", 72.0)
-            self._set_progress(db, job, "uploading", 75.0)
+            if job.youtube_video_id:
+                video_id = job.youtube_video_id
+                video_url = job.youtube_url or f"https://www.youtube.com/watch?v={video_id}"
+                self._set_progress(db, job, "uploading", 99.0)
+            else:
+                self._set_progress(db, job, "downloaded", 72.0)
+                self._set_progress(db, job, "uploading", 75.0)
 
-            def upload_progress(percent: float) -> None:
-                self._set_progress(db, job, "uploading", 75.0 + percent * 0.24)
+                def upload_progress(percent: float) -> None:
+                    self._set_progress(db, job, "uploading", 75.0 + percent * 0.24)
 
-            video_id, video_url = upload_video(db, self.settings, job, progress_callback=upload_progress)
-            job.youtube_video_id = video_id
-            job.youtube_url = video_url
+                video_id, video_url = upload_video(db, self.settings, job, progress_callback=upload_progress)
+                job.youtube_video_id = video_id
+                job.youtube_url = video_url
+
+            playlist_warning: str | None = None
+            if job.youtube_playlist_id and not job.youtube_playlist_item_id:
+                try:
+                    job.youtube_playlist_item_id = add_video_to_playlist(
+                        db,
+                        self.settings,
+                        job.youtube_playlist_id,
+                        video_id,
+                    )
+                except YouTubePlaylistError as playlist_error:
+                    playlist_name = job.youtube_playlist_title or job.youtube_playlist_id
+                    playlist_warning = f"Upload succeeded, but adding to playlist {playlist_name} failed: {playlist_error}"
+
             job.status = "uploaded"
             job.progress = 100.0
+            job.error_message = playlist_warning
             job.finished_at = utcnow()
             job.updated_at = utcnow()
             db.commit()
-            try:
-                safe_delete_download(job.local_file_path, self.settings.download_dir)
-                job.local_file_path = None
-                job.updated_at = utcnow()
-                db.commit()
-            except Exception as cleanup_error:
-                logger.warning("Upload job %s completed but cleanup failed: %s", job.id, cleanup_error)
-                job.error_message = f"Upload succeeded, but cleanup failed: {cleanup_error}"
-                job.updated_at = utcnow()
-                db.commit()
+            if job.local_file_path:
+                try:
+                    safe_delete_download(job.local_file_path, self.settings.download_dir)
+                    job.local_file_path = None
+                    job.updated_at = utcnow()
+                    db.commit()
+                except Exception as cleanup_error:
+                    logger.warning("Upload job %s completed but cleanup failed: %s", job.id, cleanup_error)
+                    cleanup_warning = f"Upload succeeded, but cleanup failed: {cleanup_error}"
+                    job.error_message = f"{playlist_warning}\n{cleanup_warning}" if playlist_warning else cleanup_warning
+                    job.updated_at = utcnow()
+                    db.commit()
             logger.info("Upload job %s completed with YouTube video %s", job.id, video_id)
         except Exception as exc:
             logger.exception("Upload job %s failed", job.id)

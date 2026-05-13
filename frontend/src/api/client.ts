@@ -1,4 +1,4 @@
-import type { AuthStatus, SelectedVodDraft, TwitchVod, UploadJob } from "../types";
+import type { AuthStatus, SelectedVodDraft, TwitchVod, UploadJob, YouTubePlaylist } from "../types";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -32,6 +32,10 @@ export function getAuthStatus(): Promise<AuthStatus> {
 export function getVods(channel?: string): Promise<TwitchVod[]> {
   const params = channel?.trim() ? `?channel=${encodeURIComponent(channel.trim())}` : "";
   return request<TwitchVod[]>(`/api/vods${params}`);
+}
+
+export function getYouTubePlaylists(): Promise<YouTubePlaylist[]> {
+  return request<YouTubePlaylist[]>("/api/youtube/playlists");
 }
 
 export function createJobs(jobs: SelectedVodDraft[]): Promise<UploadJob[]> {

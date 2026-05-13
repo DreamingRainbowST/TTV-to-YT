@@ -18,6 +18,8 @@ def create_jobs(db: Session, payload: UploadJobsCreate) -> list[UploadJob]:
             youtube_title=item.youtube_title,
             youtube_description=item.youtube_description,
             privacy_status=item.privacy_status,
+            youtube_playlist_id=item.youtube_playlist_id,
+            youtube_playlist_title=item.youtube_playlist_title,
             status="queued",
             progress=0.0,
             created_at=now,
@@ -40,12 +42,68 @@ def get_job(db: Session, job_id: int) -> UploadJob | None:
     return db.get(UploadJob, job_id)
 
 
+def _find_existing_download(job_id: int, download_dir: str) -> str | None:
+    target_dir = Path(download_dir)
+    if not target_dir.is_dir():
+        return None
+
+    candidates = [
+        path
+        for path in target_dir.glob(f"job-{job_id}-*")
+        if path.is_file() and not path.name.endswith((".part", ".ytdl"))
+    ]
+    if not candidates:
+        return None
+    return str(max(candidates, key=lambda path: path.stat().st_mtime))
+
+
+def recover_interrupted_jobs(db: Session, download_dir: str) -> int:
+    jobs = (
+        db.query(UploadJob)
+        .filter(UploadJob.status.in_(("downloading", "downloaded", "uploading")))
+        .order_by(UploadJob.created_at.asc())
+        .all()
+    )
+    recovered = 0
+
+    for job in jobs:
+        local_file = Path(job.local_file_path) if job.local_file_path else None
+        existing_download = (
+            str(local_file)
+            if local_file and local_file.is_file()
+            else _find_existing_download(job.id, download_dir)
+        )
+
+        if existing_download:
+            job.local_file_path = existing_download
+            job.progress = max(job.progress, 75.0)
+            job.error_message = None
+        else:
+            job.local_file_path = None
+            job.youtube_upload_url = None
+            job.progress = 0.0
+            job.error_message = "Recovered after interruption; download will restart."
+
+        job.status = "queued"
+        job.started_at = None
+        job.finished_at = None
+        job.updated_at = utcnow()
+        recovered += 1
+
+    if recovered:
+        db.commit()
+    return recovered
+
+
 def retry_job(db: Session, job: UploadJob) -> UploadJob:
     job.status = "queued"
     job.progress = 0.0
     job.error_message = None
-    job.youtube_video_id = None
-    job.youtube_url = None
+    if not job.youtube_video_id:
+        job.youtube_url = None
+        local_file = Path(job.local_file_path) if job.local_file_path else None
+        if not local_file or not local_file.is_file():
+            job.youtube_upload_url = None
     job.started_at = None
     job.finished_at = None
     job.updated_at = utcnow()
@@ -82,4 +140,3 @@ def serialize_datetime(value):
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
-

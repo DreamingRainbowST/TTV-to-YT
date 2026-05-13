@@ -11,11 +11,12 @@ from app.auth import google as google_auth
 from app.auth import twitch as twitch_auth
 from app.auth.state import consume_state
 from app.config import get_settings
-from app.database import get_db, init_db
-from app.schemas import AuthStatusOut, HealthOut, TwitchVodOut, UploadJobOut, UploadJobsCreate
+from app.database import SessionLocal, get_db, init_db
+from app.schemas import AuthStatusOut, HealthOut, TwitchVodOut, UploadJobOut, UploadJobsCreate, YouTubePlaylistOut
 from app.services import job_service, twitch_service
 from app.services.downloader_service import TwitchPublicFetchError, fetch_public_vods
 from app.services.oauth_token_service import get_token
+from app.services.youtube_service import YouTubePlaylistError, list_playlists
 from app.worker import JobWorker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -27,6 +28,13 @@ worker: JobWorker | None = None
 async def lifespan(app: FastAPI):
     global worker
     init_db()
+    db = SessionLocal()
+    try:
+        recovered = job_service.recover_interrupted_jobs(db, settings.download_dir)
+        if recovered:
+            logging.getLogger(__name__).info("Recovered %s interrupted upload jobs", recovered)
+    finally:
+        db.close()
     if not settings.disable_worker:
         worker = JobWorker(settings)
         worker.start()
@@ -114,6 +122,16 @@ def google_callback(
 @app.get("/api/auth/status", response_model=AuthStatusOut)
 def auth_status(db: Session = Depends(get_db)) -> AuthStatusOut:
     return AuthStatusOut(twitch=get_token(db, "twitch") is not None, google=get_token(db, "google") is not None)
+
+
+@app.get("/api/youtube/playlists", response_model=list[YouTubePlaylistOut])
+def get_youtube_playlists(db: Session = Depends(get_db)) -> list[YouTubePlaylistOut]:
+    try:
+        return list_playlists(db, settings)
+    except google_auth.GoogleAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except YouTubePlaylistError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/api/vods", response_model=list[TwitchVodOut])
