@@ -65,6 +65,18 @@ function Stop-ProcessTree {
     }
 }
 
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @()
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$FilePath failed with exit code $LASTEXITCODE."
+    }
+}
+
 function Install-BackendDependencies {
     $python = Resolve-Tool -Names @("python", "py") -InstallHint "Install Python 3.12+ and add it to PATH."
     $requirements = Join-Path $BackendDir "requirements.txt"
@@ -73,10 +85,10 @@ function Install-BackendDependencies {
     if (-not (Test-Path $VenvPython)) {
         Write-Host "Creating backend virtual environment..."
         if ((Split-Path -Leaf $python) -eq "py.exe") {
-            & $python -3 -m venv $VenvDir
+            Invoke-Checked -FilePath $python -Arguments @("-3", "-m", "venv", $VenvDir)
         }
         else {
-            & $python -m venv $VenvDir
+            Invoke-Checked -FilePath $python -Arguments @("-m", "venv", $VenvDir)
         }
     }
 
@@ -87,17 +99,23 @@ function Install-BackendDependencies {
 
     if ($shouldInstall) {
         Write-Host "Installing backend dependencies..."
-        & $VenvPython -m pip install --upgrade pip
-        & $VenvPython -m pip install -r $requirements
+        Invoke-Checked -FilePath $VenvPython -Arguments @("-m", "pip", "install", "--upgrade", "pip")
+        Invoke-Checked -FilePath $VenvPython -Arguments @("-m", "pip", "install", "-r", $requirements)
         New-Item -ItemType File -Force -Path $stamp | Out-Null
     }
 }
 
 function Install-FrontendDependencies {
-    $npm = Resolve-Tool -Names @("npm.cmd", "npm") -InstallHint "Install Node.js 20+ from https://nodejs.org/."
+    param([Parameter(Mandatory = $true)][string]$NpmPath)
+
+    $packageJson = Join-Path $FrontendDir "package.json"
     $nodeModules = Join-Path $FrontendDir "node_modules"
     $packageLock = Join-Path $FrontendDir "package-lock.json"
     $shouldInstall = -not (Test-Path $nodeModules)
+
+    if (-not (Test-Path $packageJson)) {
+        throw "Frontend package.json was not found at $packageJson. Check that the repository was downloaded completely."
+    }
 
     if ((Test-Path $nodeModules) -and (Test-Path $packageLock)) {
         $shouldInstall = (Get-Item $packageLock).LastWriteTimeUtc -gt (Get-Item $nodeModules).LastWriteTimeUtc
@@ -105,10 +123,14 @@ function Install-FrontendDependencies {
 
     if ($shouldInstall) {
         Write-Host "Installing frontend dependencies..."
-        & $npm install --prefix $FrontendDir
+        Push-Location $FrontendDir
+        try {
+            Invoke-Checked -FilePath $NpmPath -Arguments @("install")
+        }
+        finally {
+            Pop-Location
+        }
     }
-
-    return $npm
 }
 
 Set-Location $RootDir
@@ -127,7 +149,8 @@ if (Test-PortInUse -Port 5173) {
 }
 
 Install-BackendDependencies
-$npm = Install-FrontendDependencies
+$npm = Resolve-Tool -Names @("npm.cmd", "npm") -InstallHint "Install Node.js 20+ from https://nodejs.org/."
+Install-FrontendDependencies -NpmPath $npm
 
 $env:APP_BASE_URL = "http://localhost:8000"
 $env:FRONTEND_BASE_URL = "http://localhost:5173"
